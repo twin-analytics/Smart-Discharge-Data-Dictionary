@@ -54,5 +54,6 @@ constant_cols <- names(dat_clean_raw)[
 dat_clean_raw <- dat_clean_raw %>% 
   select(-all_of(c(empty_cols, constant_cols)))
 
+# HTML Report
 diagnose_web_report(dat_clean_raw)
 
