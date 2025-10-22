@@ -4,8 +4,7 @@ graphics.off()
 #Load Hmisc library
 library(Hmisc)
 #Read Data
-data=read.csv('Data/SmartDischarges_DATA_2025-10-17_1126.csv')
-data=read.csv("Data/SmartDischarges_DATA_LABELS_2025-10-17_1122.csv")
+data=read.csv("Data/SmartDischarges_DATA_2025-10-17_1116.csv")
 
 
 #Setting Labels
