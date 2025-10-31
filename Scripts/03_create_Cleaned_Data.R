@@ -2,7 +2,7 @@
 #  PROJECT: REDCap Multi-country Pediatric Sepsis Dataset
 #  SCRIPT: 03_Create_Cleaned_Data.R
 #  PURPOSE: Combine, clean, and prepare harmonized datasets 
-#           from Uganda and Rwanda for further analysis.
+#           from Uganda, Rwanda and Tanzania for further analysis.
 
 ###############################################################
 
