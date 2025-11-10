@@ -9,6 +9,11 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD LIBRARIES    #######
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+if(!require(summarytools)){
+  install.packages("summarytools", dependencies = TRUE)
+  library(summarytools)
+}
 install.packages("tidyverse")
 install.packages("xlsx")
 install.packages("expss")
@@ -26,6 +31,7 @@ library(here)      # Simplify relative file paths
 library(dplyr)     # Data manipulation (part of tidyverse)
 library(sjlabelled)# Label handling for survey data
 library(Hmisc)     # Label management, summary stats
+library(labelled)
 
 # For Exploratory Data Analysis
 library(DataExplorer)# Automated data exploration
@@ -44,7 +50,8 @@ dat_uganda <- data
 rm(data)   
   
 source("Scripts/02_RedCap_Labels.R")
-dat_rwanda_tz <- data
+dat_rwanda_tz <- data %>% 
+  filter(redcap_data_access_group != "uganda")
 rm(data)
 
 # Quick checks
@@ -134,7 +141,7 @@ form_index <- data.frame(
   mutate(StartIndex = c(0, EndIndex[-length(EndIndex)]) + 1)
   
 # Identify the ranges for the forms you want to remove
-remove_forms <- c("followup_post_discharge_autopsy_complete", 
+remove_forms <- c(#"followup_post_discharge_autopsy_complete", 
                   "fss_and_pedsql_complete", 
                   "fss_and_pedsql_patient_details_complete")
 
@@ -150,17 +157,17 @@ remove_forms <- c("followup_post_discharge_autopsy_complete",
 # Remove those columns
 # dat_clean <- dat_clean[, -remove_indices]
 
-
-autopsy_cols <- form_index$StartIndex[form_index$ColName == "followup_post_discharge_autopsy_complete"] :
-  form_index$EndIndex[form_index$ColName == "followup_post_discharge_autopsy_complete"]
-colnames(dat_clean)[autopsy_cols]
+# 
+# autopsy_cols <- form_index$StartIndex[form_index$ColName == "followup_post_discharge_autopsy_complete"] :
+#   form_index$EndIndex[form_index$ColName == "followup_post_discharge_autopsy_complete"]
+# colnames(dat_clean)[autopsy_cols]
 
 fss_pedsql <- form_index$StartIndex[form_index$ColName == "fss_and_pedsql_patient_details_complete"] :
   form_index$EndIndex[form_index$ColName == "fss_and_pedsql_complete"]
 colnames(dat_clean)[fss_pedsql]
 
 dat_clean <- dat_clean %>% 
-  select(-all_of(c(autopsy_cols, fss_pedsql)))
+  select(-all_of(c(fss_pedsql)))
 
 
 # Remove empty columns 
@@ -168,15 +175,20 @@ empty_cols <- names(dat_clean)[
   sapply(dat_clean, function(x) all(is.na(x) | x == ""))
 ]
 
-#  constant_cols <- names(dat_clean)[
-#   sapply(dat_clean, function(x) length(unique(na.omit(x))) == 1)
-# ]
+ constant_cols <- names(dat_clean)[
+  sapply(dat_clean, function(x) length(unique(na.omit(x))) <= 1)
+]
+ 
+constant_cols
+
+unique(dat_clean$otherstudy_checkbox_adm_6); unique(dat_clean$admitabx_adm_11)
+unique(dat_clean$hivquestions_adm_4); unique(dat_clean$respinterv_dis_3)
 
 # dat_clean <- remove_empty(dat_clean, which=c("rows", "cols"), quiet = FALSE)
  # dat_clean <- remove_constant(dat_clean, na.rm = FALSE)
 
 dat_clean <- dat_clean %>% 
-  select(-all_of(c(empty_cols)))
+  select(-all_of(c(empty_cols, constant_cols)))
 
 
 ## ~~~~~~~~~~~~~~~~~~
@@ -190,8 +202,8 @@ label_vars <- sapply(dat_clean, label)
 
 
 # HTML Report
-diagnose_web_report(dat_clean) # dlookr
-create_report(dat_clean) # DataExplorer
+# diagnose_web_report(dat_clean) # dlookr
+# create_report(dat_clean) # DataExplorer
 
 
 ## ~~~~~~~~~~~~~~~~~~
@@ -257,10 +269,10 @@ not_sure <- c(Unknown_97, Dont_know_97, unsure_97)
 # Replace 97 or text equivalents ("Dont know", "Unsure", etc.) with NA
 dat_clean <- dat_clean %>%
   mutate(across(any_of(not_sure), 
-                ~ dplyr::case_when(
+                ~ factor(case_when(
                   . %in% c(97, "97", "Dont know", "Don't know", 
                            "Not sure", "Unsure", "Unknown") ~ NA,
-                  TRUE ~ .
+                  TRUE ~ .)
                 )))
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -276,18 +288,127 @@ dat_clean <- dat_clean %>%
   fill(-all_of(followup_cols), .direction = "down") %>%
   ungroup()
 
-# dat_clean <- dat_clean %>% 
-#   group_by(studyid_adm, redcap_event_name) %>% 
-#   fill(-all_of(followup_cols), .direction = "down") %>% 
-#   ungroup()
+levels(dat_clean$redcap_event_name)
+autopsy_rows <- dat_clean %>% 
+  filter(redcap_event_name == "Autopsy")
+
+autopsy_rows %>% 
+  select(studyid_adm, ageadmit_adm, studygroup_adm, infection_adm, excludeadmit_adm,
+         consenttype_adm, consentobtained_adm, admitdate_adm, attendant_adm, attendantsex_adm) %>% 
+  glimpse()
+View(autopsy_rows)
+
+adm_rows <- dat_clean %>% 
+  filter(redcap_event_name == c("hospitalization and discharge"))
+glimpse(adm_rows)
+
+event_rows <- dat_clean %>% 
+  filter(redcap_event_name %in% c("2 month discharge", "4 month discharge", "6 month discharge", "12 month discharge", "Autopsy"))
+
+autopsy_rows %>% 
+  select(studyid_adm, redcap_event_name, infection_adm, malariastatuspos_adm, death_dis) %>% 
+  print(n=Inf)
+
+table(dat_clean$infection_adm); table(autopsy_rows$malariastatuspos_adm)
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# FILL DOWN AUTOPSY ROWS   ####
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+followup_cols <- grep("_fol", colnames(dat_clean), value = TRUE)
+
+dat_clean <- dat_clean %>%
+  group_by(studyid_adm) %>%
+  fill(-all_of(followup_cols), .direction = "up") %>%
+  ungroup()
 
 
+# Then apply the filter
+dat_clean <- dat_clean %>% 
+  filter(redcap_event_name != "Autopsy")
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ONLY FINAL VISIT         ####
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Quick checks
 dat_subset <- dat_clean %>%
   arrange(redcap_event_name) %>% 
   group_by(studyid_adm) %>% 
   slice_tail(n=1)
 
+dat_clean <- dat_subset
+
+# Currently, for yes/no variables, yes is the reference group
+# We need to make it so no is the reference
+
+levels(dat_clean$infection_adm) # Yes is the reference group
+factor_vars <- lapply(dat_clean, levels)
+factor_vars$infection_adm
+
+yesno_vars <- sapply(factor_vars, identical, c("Yes", "No"))
+yesno_vars <- names(yesno_vars[yesno_vars])  # keeps only the TRUE elements (columns that are Yes/No)
+dat_clean <- dat_clean %>% 
+  mutate(across(all_of(yesno_vars), ~relevel(., ref = "No")))
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# DATA DICTIONARY         ######
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Identify variables that are not relevant to exclude from the data dictionary e.g
+# redundant, administrative, identifying information, exclusion criteria variables
+
+consent_vars <- grep("consent_", colnames(dat_clean), value = TRUE)
+
+comment_vars <- dat_clean %>%
+  select(grep("_complete", colnames(dat_clean), value = TRUE))
+
+exclusion_vars <- c("studyid_adm",
+                    "creationdate_adm",
+                    "uploaddate_adm",
+                    "appversion_adm",
+                    "is_pilot_adm",
+                    "username_adm",
+                    "nursename_adm",
+                    "nursenameother_adm",
+                    grep("phone", colnames(dat_clean), value = TRUE),
+                    grep("comment", colnames(dat_clean), value = TRUE),
+                    grep("_complete", colnames(dat_clean), value = TRUE),
+                    )
+
+exclude <- c(redundant_vars, admin_vars, identifying_vars, exlusion_vars)
+
+dat_clean <- dat_clean %>% 
+  select(-all_of(exclude))
 
 
-save.image("Workspace/03_Create_Cleaned_Data.RData")
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Create Data Dictionary       ######
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Data dictionary for mom dataset
+cat("Creating data dictionary ...\n")
+dat_codebook <- dfSummary(dat_clean, graph.magnif = 0.5)
+
+# Create a temporary file path to save the HTML report
+output_file <- "Results/Data_Dictionary.html"
+
+# Save the mom data dictionary as an HTML file
+print(dat_codebook, method = "browser", file = output_file)
+cat("Data dictionary saved to:", output_file, "\n")
+
+
+
+
+
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# SAVE WORKSPACE             ########
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Only keep final datasets
+redcap_date <- "2025-10-27"
+to_keep <- c("dat_uganda", "dat_rwanda_tz", "dat_raw", "dat_subset", "dat_clean")
+rm(list = setdiff(ls(), to_keep))
+
+save.image(paste0("Workspace/03_Create_Cleaned_Data (", redcap_date, ").RData"))
+
