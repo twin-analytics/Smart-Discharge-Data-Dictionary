@@ -10,10 +10,6 @@
 # LOAD LIBRARIES    #######
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-if(!require(summarytools)){
-  install.packages("summarytools", dependencies = TRUE)
-  library(summarytools)
-}
 install.packages("tidyverse")
 install.packages("xlsx")
 install.packages("expss")
@@ -166,8 +162,16 @@ fss_pedsql <- form_index$StartIndex[form_index$ColName == "fss_and_pedsql_patien
   form_index$EndIndex[form_index$ColName == "fss_and_pedsql_complete"]
 colnames(dat_clean)[fss_pedsql]
 
+grep("consent", form_index$ColName, value = TRUE)
+unique(form_index$ColName)
+
+consent_cols <- form_index$StartIndex[form_index$ColName == "consent_form_storage_complete"] : 
+  form_index$EndIndex[form_index$ColName == "consent_form_storage_complete"]
+colnames(dat_clean)[consent_cols]
+
+
 dat_clean <- dat_clean %>% 
-  select(-all_of(c(fss_pedsql)))
+  select(-all_of(c(fss_pedsql, consent_cols)))
 
 
 # Remove empty columns 
@@ -348,54 +352,6 @@ yesno_vars <- sapply(factor_vars, identical, c("Yes", "No"))
 yesno_vars <- names(yesno_vars[yesno_vars])  # keeps only the TRUE elements (columns that are Yes/No)
 dat_clean <- dat_clean %>% 
   mutate(across(all_of(yesno_vars), ~relevel(., ref = "No")))
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# DATA DICTIONARY         ######
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# Identify variables that are not relevant to exclude from the data dictionary e.g
-# redundant, administrative, identifying information, exclusion criteria variables
-
-consent_vars <- grep("consent_", colnames(dat_clean), value = TRUE)
-
-comment_vars <- dat_clean %>%
-  select(grep("_complete", colnames(dat_clean), value = TRUE))
-
-exclusion_vars <- c("studyid_adm",
-                    "creationdate_adm",
-                    "uploaddate_adm",
-                    "appversion_adm",
-                    "is_pilot_adm",
-                    "username_adm",
-                    "nursename_adm",
-                    "nursenameother_adm",
-                    grep("phone", colnames(dat_clean), value = TRUE),
-                    grep("comment", colnames(dat_clean), value = TRUE),
-                    grep("_complete", colnames(dat_clean), value = TRUE),
-                    )
-
-exclude <- c(redundant_vars, admin_vars, identifying_vars, exlusion_vars)
-
-dat_clean <- dat_clean %>% 
-  select(-all_of(exclude))
-
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Create Data Dictionary       ######
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# Data dictionary for mom dataset
-cat("Creating data dictionary ...\n")
-dat_codebook <- dfSummary(dat_clean, graph.magnif = 0.5)
-
-# Create a temporary file path to save the HTML report
-output_file <- "Results/Data_Dictionary.html"
-
-# Save the mom data dictionary as an HTML file
-print(dat_codebook, method = "browser", file = output_file)
-cat("Data dictionary saved to:", output_file, "\n")
-
-
 
 
 
