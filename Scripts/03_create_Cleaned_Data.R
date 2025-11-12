@@ -1,23 +1,23 @@
-###############################################################
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #  PROJECT: REDCap Multi-country Pediatric Sepsis Dataset
 #  SCRIPT: 03_Create_Cleaned_Data.R
 #  PURPOSE: Combine, clean, and prepare harmonized datasets 
 #           from Uganda, Rwanda and Tanzania for further analysis.
 
-###############################################################
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 # LOAD LIBRARIES    #######
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-install.packages("tidyverse")
-install.packages("xlsx")
-install.packages("expss")
-install.packages("janitor")
-install.packages("DataExplorer")
-install.packages("SmartEDA")
-install.packages("dlookr")
-install.packages("here")
+# install.packages("tidyverse")
+# install.packages("xlsx")
+# install.packages("expss")
+# install.packages("janitor")
+# install.packages("DataExplorer")
+# install.packages("SmartEDA")
+# install.packages("dlookr")
+# install.packages("here")
 
 # Core set of libraries for data manipulation
 library(tidyverse) # Data wrangling and transformation
@@ -40,6 +40,8 @@ library(dlookr)      # Data diagnosis and visualization
 # Load country-specific REDCap label scripts
 # Rename the loaded data and remove the original 'data' object.
 # This is done to prevent potential overwriting when loading the next dataset.
+
+redcap_date <- "2025-10-27"
 
 source("Scripts/01_Redcap_Labels.r")
 dat_uganda <- data
@@ -87,11 +89,13 @@ label(dat_raw) <- as.list(c(label_vars_uganda, label_vars_rwanda))[names(dat_raw
 str(dat_raw)
 glimpse(dat_raw)
 
-# ~~~~~~~~~~~~~~~~~~~~~~~
-# HANDLE FACTOR VARIABLES ####
-# ~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# GLOBAL DATA MANIPULATIONS  ####
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Replace factors cols ####
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
+## Replace Factors Cols ####
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # REDCap automatically creates duplicate factor  versions of each variable
 # Replace the original version of variables with the factor versions
@@ -120,14 +124,10 @@ label(dat_raw) <- as.list(label_vars)
 dat_clean <- dat_raw %>% 
   clean_names()
 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# REMOVE AUTOPSY & QUALITY OF LIFE (FSS/PedsQL)  SECTIONS ####
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Verbal Autopsy not needed and fss and pedsql (Word of Matt)
-
-# dat_clean <- dat_clean %>%
-#   filter(redcap_event_name != "Autopsy")
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
+## Remove Consent and QOL (FSS/PedsQL) Sections ####
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Identify which row each form starts/ends
 # Store form index and and colnames into a data frame
@@ -136,28 +136,6 @@ form_index <- data.frame(
   ColName = grep("complete", colnames(dat_clean), value = TRUE)) %>% 
   mutate(StartIndex = c(0, EndIndex[-length(EndIndex)]) + 1)
   
-# Identify the ranges for the forms you want to remove
-remove_forms <- c(#"followup_post_discharge_autopsy_complete", 
-                  "fss_and_pedsql_complete", 
-                  "fss_and_pedsql_patient_details_complete")
-
-# Find their start and end indices
-# remove_indices <- purrr::map2(
-#   form_index$StartIndex[form_index$ColName %in% remove_forms],
-#   form_index$EndIndex[form_index$ColName %in% remove_forms],
-#   ~ .x:.y
-# ) %>% unlist()
-# 
-# colnames(dat_clean)[remove_indices]
-
-# Remove those columns
-# dat_clean <- dat_clean[, -remove_indices]
-
-# 
-# autopsy_cols <- form_index$StartIndex[form_index$ColName == "followup_post_discharge_autopsy_complete"] :
-#   form_index$EndIndex[form_index$ColName == "followup_post_discharge_autopsy_complete"]
-# colnames(dat_clean)[autopsy_cols]
-
 fss_pedsql <- form_index$StartIndex[form_index$ColName == "fss_and_pedsql_patient_details_complete"] :
   form_index$EndIndex[form_index$ColName == "fss_and_pedsql_complete"]
 colnames(dat_clean)[fss_pedsql]
@@ -169,12 +147,14 @@ consent_cols <- form_index$StartIndex[form_index$ColName == "consent_form_storag
   form_index$EndIndex[form_index$ColName == "consent_form_storage_complete"]
 colnames(dat_clean)[consent_cols]
 
-
 dat_clean <- dat_clean %>% 
   select(-all_of(c(fss_pedsql, consent_cols)))
 
 
-# Remove empty columns 
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
+## Remove Empty Columns ####
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
+
 empty_cols <- names(dat_clean)[
   sapply(dat_clean, function(x) all(is.na(x) | x == ""))
 ]
@@ -195,9 +175,9 @@ dat_clean <- dat_clean %>%
   select(-all_of(c(empty_cols, constant_cols)))
 
 
-## ~~~~~~~~~~~~~~~~~~
-## Preserve labels ####
-## ~~~~~~~~~~~~~~~~~~
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
+## Preserve Data Labels ####
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Subsequent data manipulations may remove labels since tidyverse
 #  functions are not compatible with labels and will get overwritten
@@ -205,14 +185,9 @@ dat_clean <- dat_clean %>%
 label_vars <- sapply(dat_clean, label)
 
 
-# HTML Report
-# diagnose_web_report(dat_clean) # dlookr
-# create_report(dat_clean) # DataExplorer
-
-
-## ~~~~~~~~~~~~~~~~~~
-## NA if unknown ####
-## ~~~~~~~~~~~~~~~~~~
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
+## NA If Unknown        ####
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Replace unknown, don't know, doesn't know with NA
 # Define columns where 97 = Unknown
@@ -279,13 +254,39 @@ dat_clean <- dat_clean %>%
                   TRUE ~ .)
                 )))
 
+
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
+## Re-level Yes/No Variables ####
+## ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Currently, for yes/no variables, yes is the reference group
+# We need to make it so no is the reference
+
+levels(dat_clean$infection_adm) # Yes is the reference group
+factor_vars <- lapply(dat_clean, levels)
+factor_vars$infection_adm
+
+yesno_vars <- sapply(factor_vars, identical, c("Yes", "No"))
+yesno_vars <- names(yesno_vars[yesno_vars])  # keeps only the TRUE elements (columns that are Yes/No)
+dat_clean <- dat_clean %>% 
+  mutate(across(all_of(yesno_vars), ~relevel(., ref = "No")))
+
+## ~~~~~~~~~~~~~~~~~~~
+## Replace Blanks ####
+## ~~~~~~~~~~~~~~~~~~~
+
+# Replace blank values with NA
+dat_clean <- dat_clean %>% 
+  # Apply function na_if across all character columns
+  mutate(across(where(is.character), ~na_if(., "")))
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # FILL DOWN NON-FOLLOWUP VARIABLES ####
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 followup_cols <- grep("_fol", colnames(dat_clean), value = TRUE)
 
-view(subset(dat_clean, studyid_adm == "0002-1A-CH-004"))
+# view(subset(dat_clean, studyid_adm == "0002-1A-CH-004"))
 
 dat_clean <- dat_clean %>%
   group_by(studyid_adm) %>%
@@ -333,6 +334,7 @@ dat_clean <- dat_clean %>%
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ONLY FINAL VISIT         ####
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 # Quick checks
 dat_subset <- dat_clean %>%
   arrange(redcap_event_name) %>% 
@@ -341,28 +343,12 @@ dat_subset <- dat_clean %>%
 
 dat_clean <- dat_subset
 
-# Currently, for yes/no variables, yes is the reference group
-# We need to make it so no is the reference
-
-levels(dat_clean$infection_adm) # Yes is the reference group
-factor_vars <- lapply(dat_clean, levels)
-factor_vars$infection_adm
-
-yesno_vars <- sapply(factor_vars, identical, c("Yes", "No"))
-yesno_vars <- names(yesno_vars[yesno_vars])  # keeps only the TRUE elements (columns that are Yes/No)
-dat_clean <- dat_clean %>% 
-  mutate(across(all_of(yesno_vars), ~relevel(., ref = "No")))
-
-
-
-
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # SAVE WORKSPACE             ########
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Only keep final datasets
-redcap_date <- "2025-10-27"
 to_keep <- c("dat_uganda", "dat_rwanda_tz", "dat_raw", "dat_subset", "dat_clean")
 rm(list = setdiff(ls(), to_keep))
 
