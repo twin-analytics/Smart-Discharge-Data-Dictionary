@@ -18,7 +18,7 @@ if(!require(summarytools)){
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Import Datasets               ##### 
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Source the cleaned script and the minimal selection criteria
 source("Scripts/03_create_Cleaned_Data.R")
@@ -36,7 +36,7 @@ source("Scripts/04_Selection_Criteria.R")
 comment_vars <- dat_clean %>%
   select(grep("_complete", colnames(dat_clean), value = TRUE))
 
-exclusion_vars <- c("studyid_adm",
+exclude <- c("studyid_adm",
                     "creationdate_adm",
                     "uploaddate_adm",
                     "appversion_adm",
@@ -45,16 +45,14 @@ exclusion_vars <- c("studyid_adm",
                     "nursename_adm",
                     "noteligible_adm",
                     "nursenameother_adm",
+                    "exclusionother_adm",
                     grep("phone", colnames(dat_clean), value = TRUE),
                     grep("comment", colnames(dat_clean), value = TRUE),
-                    grep("_complete", colnames(dat_clean), value = TRUE),
+                    grep("_complete", colnames(dat_clean), value = TRUE)
 )
 
-exclude <- c(redundant_vars, admin_vars, identifying_vars, exlusion_vars)
-
 dat_clean <- dat_clean %>% 
-  select(-all_of(exclude))
-
+  select(-any_of(exclude))
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Create Data Dictionary       ######
