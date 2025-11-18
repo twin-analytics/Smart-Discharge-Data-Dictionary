@@ -49,10 +49,16 @@ rm(data)
   
 source("Scripts/02_RedCap_Labels.R")
 dat_rwanda_tz <- data %>% 
-  filter(redcap_data_access_group != "uganda")
+  filter(country_adm != "uganda")
+# dat_rwanda_tz <- subset(dat_rwanda_tz,
+#  !(country_adm == "Tanzania" & studygroup_adm %in% c("< 6 months", "6 months to < 5 years")))
 rm(data)
 
 # Quick checks
+table(dat_rwanda_tz$studygroup_adm)
+table(data$studygroup_adm[data$country_adm == "Tanzania"])
+table(dat_rwanda_tz$studygroup_adm[dat_rwanda_tz$country_adm == "Tanzania"])
+
 unique(dat_uganda$redcap_event_name)
 unique(dat_rwanda_tz$redcap_event_name)
 dim(dat_uganda)
@@ -339,7 +345,8 @@ dat_clean <- dat_clean %>%
 dat_subset <- dat_clean %>%
   arrange(redcap_event_name) %>% 
   group_by(studyid_adm) %>% 
-  slice_tail(n=1)
+  slice_tail(n=1) %>% 
+  ungroup()
 
 dat_clean <- dat_subset
 
@@ -349,7 +356,7 @@ dat_clean <- dat_subset
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Only keep final datasets
-to_keep <- c("dat_uganda", "dat_rwanda_tz", "dat_raw", "dat_subset", "dat_clean")
+to_keep <- c("dat_uganda", "dat_rwanda_tz", "dat_raw", "dat_subset", "dat_clean", "redcap_date")
 rm(list = setdiff(ls(), to_keep))
 
 save.image(paste0("Workspace/03_Create_Cleaned_Data (", redcap_date, ").RData"))

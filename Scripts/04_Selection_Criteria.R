@@ -79,6 +79,7 @@ table(dat_clean$consentobtained_adm)
 consent_exclude <- subset(dat_clean, consentobtained_adm == "No")
 dat_clean <- subset(dat_clean, consentobtained_adm == "Yes"|is.na(consentobtained_adm))
 n_distinct(dat_clean$studyid_adm)
+dim(dat_clean)
 
 
 

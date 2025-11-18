@@ -37,18 +37,17 @@ comment_vars <- dat_clean %>%
   select(grep("_complete", colnames(dat_clean), value = TRUE))
 
 exclude <- c("studyid_adm",
-                    "creationdate_adm",
-                    "uploaddate_adm",
-                    "appversion_adm",
-                    "is_pilot_adm",
-                    "username_adm",
-                    "nursename_adm",
-                    "noteligible_adm",
-                    "nursenameother_adm",
-                    "exclusionother_adm",
-                    grep("phone", colnames(dat_clean), value = TRUE),
-                    grep("comment", colnames(dat_clean), value = TRUE),
-                    grep("_complete", colnames(dat_clean), value = TRUE)
+             "creationdate_adm",
+             "uploaddate_adm",
+             "appversion_adm",
+             "is_pilot_adm",
+             "username_adm",
+             "nursename_adm",
+             "noteligible_adm",
+             "nursenameother_adm",
+              grep("phone", colnames(dat_clean), value = TRUE),
+              grep("comment", colnames(dat_clean), value = TRUE),
+              grep("_complete", colnames(dat_clean), value = TRUE)
 )
 
 dat_clean <- dat_clean %>% 
